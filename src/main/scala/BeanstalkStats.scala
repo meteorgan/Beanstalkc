@@ -1,0 +1,56 @@
+package org.beanstalkc
+
+import org.json.JSONObject
+
+class BeanstalkStats(stats: JSONObject) {
+    def currentJobsUrgent = stats.getLong("current-jobs-urgent")
+    def currentJobsReady = stats.getLong("current-jobs-ready")
+    def currentJobsReserved = stats.getLong("current-jobs-reserved")
+    def currentJobDelayed = stats.getLong("current-jobs-delayed")
+    def currentJobsBuried = stats.getLong("current-jobs-buried")
+    def cmdPut = stats.getLong("cmd-put")
+    def cmdPeek = stats.getLong("cmd-peek")
+    def cmdPeekReady = stats.getLong("cmd-peek-ready")
+    def cmdPeekDelayed = stats.getLong("cmd-peek-delayed")
+    def cmdPeekBuried = stats.getLong("cmd-peek-buried")
+    def cmdReserve = stats.getLong("cmd-reserve")
+    def cmdUse = stats.getLong("cmd-use")
+    def cmdWatch = stats.getLong("cmd-watch")
+    def cmdIgnore = stats.getLong("cmd-ignore")
+    def cmdDelete = stats.getLong("cmd-delete")
+    def cmdRelease = stats.getLong("cmd-release")
+    def cmdBury = stats.getLong("cmd-bury")
+    def cmdKick = stats.getLong("cmd-kick")
+    def cmdStats = stats.getLong("cmd-stats")
+    def cmdStatsJob = stats.getLong("cmd-stats-job")
+    def cmdStatsTubes = stats.getLong("cmd-stats-tube")
+    def cmdListTubes = stats.getLong("cmd-list-tubes")
+    def cmdListTubeUsed = stats.getLong("cmd-list-tube-used")
+    def cmdListTubesWatched = stats.getLong("cmd-list-tubes-watched")
+    def cmdPauseTube = stats.getLong("cmd-pause-tube")
+    def jobTimeouts = stats.getLong("job-timeouts")
+    def totalJobs = stats.getLong("total-jobs")
+    def maxJobSize = stats.getInt("max-job-size")
+    def currentTubes = stats.getLong("current-tubes")
+    def currentConnections = stats.getInt("current-connections")
+    def currentProducers = stats.getInt("current-producers")
+    def currentWorkers = stats.getInt("current-workers")
+    def currentWaiting = stats.getInt("current-waiting")
+    def totalConnections = stats.getInt("total-connections")
+    def pid = stats.getInt("pid")
+    def version = stats.getString("version")
+    def rusageUtime = stats.getDouble("rusage-utime")
+    def rusageStime = stats.getDouble("rusage-stime")
+    def uptime = stats.getLong("uptime")
+    def binlogOldestIndex = stats.getInt("binlog-oldest-index")
+    def binlogCurrentIndex = stats.getInt("binlog-current-index")
+    def binlogMaxSize = stats.getLong("binlog-max-size")
+    def binlogRecordsWritten = stats.getLong("binlog-records-written")
+    def binlogRecordsMigrated = stats.getLong("binlog-records-migrated")
+    def id = stats.getString("id")
+    def hostname = stats.getString("hostname")
+
+    override def toString(): String = {
+        stats.toString
+    }
+}
