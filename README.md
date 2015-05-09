@@ -1,0 +1,1 @@
+beanstalk client for scala
