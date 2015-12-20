@@ -1,7 +1,13 @@
 package org.beanstalkc
 
+import java.util.concurrent.TimeUnit
+
 import org.json.JSONObject
 import org.yaml.snakeyaml.Yaml
+
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Try, Failure, Success}
 
 class Beanstalkc(conn: BeanstalkConnect) {
     def this(host: String, port: Int) {
@@ -22,7 +28,6 @@ class Beanstalkc(conn: BeanstalkConnect) {
         val command = s"put $priority $delay $ttr $size"
         val expectErr = List("BURIED", "EXPECTED_CRLF", "JOB_TOO_BIG", "DRAINING")
         val response = conn.sendCommand(command, data, "INSERTED", expectErr)
-
         response(0).toInt
     }
 
@@ -43,12 +48,14 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkTimeoutException])
     def reserve(timeout: Int): Job = {
         val command = s"reserve-with-timeout $timeout"
         reserve(command)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkTimeoutException])
     private def reserve(command: String): Job = {
         val expectErr = List("DEADLINE_SOON", "TIMED_OUT")
         val response = conn.sendCommand(command, "RESERVED", expectErr)
@@ -60,11 +67,13 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def release(id: Long): Unit = {
         release(id, Job.DEFAULT_PRIORITY, Job.DEFAULT_DELAY)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def release(id: Long, pri: Long, delay: Int): Unit = {
         val command = s"release $id $pri $delay"
         val expectErr = List("BURIED", "NOT_FOUND")
@@ -72,6 +81,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def bury(id: Long, pri: Long): Unit = {
         val command = s"bury $id $pri"
         val expectErr = List("NOT_FOUND")
@@ -79,11 +89,13 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def bury(id: Long): Unit = {
         bury(id, Job.DEFAULT_PRIORITY)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def touch(id: Long): Unit = {
         val command = s"touch $id"
         val expectErr = List("NOT_FOUND")
@@ -99,6 +111,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def kickJob(id: Long): Unit = {
         val command = s"kick-job $id"
         val expectErr = List("NOT_FOUND")
@@ -106,6 +119,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def delete(id: Long): Unit = {
         val command = s"delete $id"
         val expectErr = List("NOT_FOUND")
@@ -168,6 +182,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def pauseTube(tube: String, delay: Int): Unit = {
         val command = s"pause-tube $tube $delay"
         val expectErr = List("NOT_FOUND")
@@ -175,30 +190,35 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def peek(id: Long): Job = {
         val command = s"peek $id"
         peek(command)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def peekReady(): Job = {
         val command = "peek-ready"
         peek(command)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def peekDelayed(): Job = {
         val command = "peek-delayed"
         peek(command)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def peekBuried(): Job = {
         val command = "peek-buried"
         peek(command)
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     private def peek(command: String): Job = {
         val expectErr = List("NOT_FOUND")
         val response = conn.sendCommand(command, "FOUND", expectErr)
@@ -209,6 +229,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def statsJob(id: Long): JobStats = {
         val command = s"stats-job  $id"
         val expectErr = List("NOT_FOUND")
@@ -221,6 +242,7 @@ class Beanstalkc(conn: BeanstalkConnect) {
     }
 
     @throws(classOf[BeanstalkException])
+    @throws(classOf[BeanstalkNotFoundException])
     def statsTube(tube: String): TubeStats = {
         val command = s"stats-tube $tube"
         val expectErr = List("NOT_FOUND")
@@ -274,26 +296,27 @@ class Beanstalkc(conn: BeanstalkConnect) {
 
 object Beanstalkc {
     def main(args: Array[String]): Unit = {
-        val client = new Beanstalkc("127.0.0.1", 14711)
+        val client = new Beanstalkc("127.0.0.1")
         val tube = "test_pause_tube"
         client.use(tube)
         client.watch(tube)
         client.ignore(Job.DEFAULT_TUBE)
+        println("before pause")
         client.put("before pause")
-        client.pauseTube(tube, 10)
+        client.pauseTube(tube, 5)
+        println("after pause")
         client.put("after pause1")
         client.put("after pause2")
 
+        println("reserve1")
         val job1 = client.reserve()
+        println("reserve2")
         val job2 = client.reserve()
-        val job3 = client.reserve()
 
-        println(client.statsJob(job1.getId()))
-        println(client.statsJob(job2.getId()))
+        println("reserve3")
+        val job3 = client.reserve(2)
+        println("after reserve3")
         println(client.statsJob(job3.getId()))
-
-        client.delete(job1.getId())
-        client.delete(job2.getId())
         client.delete(job3.getId())
 
         println(client.statsTube(tube))
