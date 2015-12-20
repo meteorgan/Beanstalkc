@@ -1,7 +1,7 @@
 package org.beanstalkc
 
-import java.io.BufferedInputStream
-import java.net.Socket
+import java.io.{BufferedInputStream}
+import java.net.{Socket}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -36,6 +36,9 @@ class SocketConnect(host: String, port: Int) extends BeanstalkConnect {
         val buffer = new ArrayBuffer[Byte]
         for(i <- 0 until size) {
             val char = inputStream.read()
+            if(char == -1) {
+                throw BeanstalkDisconnectedException("server had closed")
+            }
             buffer += char.toByte
         }
 
@@ -49,9 +52,12 @@ class SocketConnect(host: String, port: Int) extends BeanstalkConnect {
     override def getResponse(): List[String] = {
         val buffer = new StringBuilder()
         do {
-            val cur = inputStream.read().toChar
-            buffer += cur
-        }while(!buffer.endsWith(BeanstalkConnect.CRLF))
+            val cur = inputStream.read()
+            if(cur == -1) {
+                throw BeanstalkDisconnectedException("server had closed")
+            }
+            buffer += cur.toChar
+        } while (!buffer.endsWith(BeanstalkConnect.CRLF))
 
         buffer.dropRight(2).toString().split(" ").toList
     }
