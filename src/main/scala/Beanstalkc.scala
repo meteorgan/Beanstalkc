@@ -5,10 +5,6 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.yaml.snakeyaml.Yaml
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Try, Failure, Success}
-
 class Beanstalkc(conn: BeanstalkConnect) {
     def this(host: String, port: Int) {
         this(new SocketConnect(host, port))
