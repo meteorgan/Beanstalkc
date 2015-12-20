@@ -1,5 +1,6 @@
 import java.util.concurrent.TimeUnit
 
+import org.beanstalkc.{BeanstalkException, Job, Beanstalkc}
 import org.scalatest.FlatSpec
 
 
