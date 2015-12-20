@@ -1,11 +1,9 @@
 package org.beanstalkc
 
-class BeanstalkException private(ex: Exception) extends Exception(ex) {
-    def this(message: String) = this(new Exception(message))
-    def this(message: String, cause: Throwable) = this(new Exception(message, cause))
-}
+case class BeanstalkException(message: String) extends Exception(message)
 
-object BeanstalkException {
-    def apply(message: String) = new BeanstalkException(message)
-    def apply(message: String, cause: Throwable) = new BeanstalkException(message, cause)
-}
+case class BeanstalkTimeoutException(message: String) extends Exception(message)
+
+case class BeanstalkDisconnectedException(message: String) extends Exception(message)
+
+case class BeanstalkJobNotFoundException(message: String) extends Exception(message)
