@@ -1,11 +1,11 @@
 import java.util.concurrent.TimeUnit
 
-import org.beanstalkc.{BeanstalkException, Job, Beanstalkc}
+import org.beanstalkc._
 import org.scalatest.FlatSpec
 
 
 class BeanstalkcSpec extends FlatSpec {
-    val client = new Beanstalkc("127.0.0.1", 14711)
+    val client = new Beanstalkc("127.0.0.1")
 
     "put" should "return a Long value" in {
         client.use(Job.DEFAULT_TUBE)
@@ -31,12 +31,12 @@ class BeanstalkcSpec extends FlatSpec {
         }
     }
 
-    "delete" should "raise exception if delete a job twice" in {
+    "delete" should "raise exception if delete a job does not exist" in {
         client.use(Job.DEFAULT_TUBE)
 
         val id = client.put("delete")
         client.delete(id)
-        intercept[BeanstalkException] {
+        intercept[BeanstalkNotFoundException] {
             client.delete(id)
         }
     }
@@ -161,7 +161,7 @@ class BeanstalkcSpec extends FlatSpec {
         client.watch(tube)
         client.ignore(Job.DEFAULT_TUBE)
 
-        intercept[BeanstalkException] {
+        intercept[BeanstalkTimeoutException] {
             client.reserve(3)
         }
 
@@ -250,7 +250,7 @@ class BeanstalkcSpec extends FlatSpec {
         client.watch(tube)
         client.ignore(Job.DEFAULT_TUBE)
 
-        intercept[BeanstalkException] {
+        intercept[BeanstalkTimeoutException] {
             client.reserve(4)
         }
 

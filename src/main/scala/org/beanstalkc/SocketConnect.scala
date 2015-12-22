@@ -1,7 +1,7 @@
 package org.beanstalkc
 
-import java.io.{BufferedInputStream}
-import java.net.{Socket}
+import java.io.BufferedInputStream
+import java.net.Socket
 
 import scala.collection.mutable.ArrayBuffer
 
