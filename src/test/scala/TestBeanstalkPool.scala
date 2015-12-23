@@ -10,7 +10,7 @@ object TestBeanstalkPool {
     def main(args: Array[String]) = {
         val system = ActorSystem()
 
-        val pool = new BeanstalkPool("127.0.0.1", BeanstalkConnect.DEFAULT_PORT, 1, 3)
+        val pool = new BeanstalkPool("192.168.1.112", BeanstalkConnect.DEFAULT_PORT, 1, 3)
         pool.maxIdleTime = 40
         val client1 = pool.getClient()
         println(client1.listTubes())
@@ -22,17 +22,17 @@ object TestBeanstalkPool {
             temp = pool.getClient()
             println(Thread.currentThread() + " get connection")
         }
-//        system.scheduler.scheduleOnce(6 seconds) {
-//            temp.close()
-//            println(Thread.currentThread() +  " release connection.")
-//        }
+        system.scheduler.scheduleOnce(6 seconds) {
+            temp.close()
+            println(Thread.currentThread() +  " release connection.")
+        }
 
-        TimeUnit.SECONDS.sleep(3)
+        TimeUnit.SECONDS.sleep(10)
         println("waiting....")
         val client3 = pool.getClient()
         println(client3.listTubes())
 
-        println(client1.listTubes())  // exception here. socketException
+        println(client1.listTubes())
         client1.close()
         client2.close()
         client3.close()

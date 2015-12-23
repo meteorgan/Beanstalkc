@@ -56,14 +56,22 @@ class BeanstalkPool(val host: String, val port: Int, val minPoolSize: Int, val m
             }
             client.pool = this
             client.lastUsed = System.currentTimeMillis()
-            client.inUsed = true
             client
         }
     }
 
+    // 回收失效的连接
+    def destroyClient(client: Beanstalkc): Unit = {
+        lock.synchronized {
+            client.conn.close()
+            usedClients -= client
+            lock.notifyAll()
+        }
+    }
+
+    // 回收正常连接
     def reapClient(client: Beanstalkc): Unit = {
         lock.synchronized {
-            client.inUsed = false
             if(usedClients.contains(client)) {
                 usedClients -= client
                 notUsedClients += client

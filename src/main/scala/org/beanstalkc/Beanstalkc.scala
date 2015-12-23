@@ -1,5 +1,7 @@
 package org.beanstalkc
 
+import java.io.IOException
+
 import org.json.JSONObject
 import org.yaml.snakeyaml.Yaml
 
@@ -18,20 +20,71 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
 
     private[beanstalkc] var pool: BeanstalkPool = null
     private[beanstalkc] var lastUsed: Long = 0
-    private[beanstalkc] var inUsed = false
+    private var disconnected = false
 
     private def updateLastUsed = {
         lastUsed = System.currentTimeMillis()
     }
 
+    private def sendCommand(command: String): Unit = {
+        updateLastUsed
+        try {
+            conn.sendCommand(command)
+        } catch {
+            case e: IOException => disconnected = true; throw BeanstalkDisconnectedException(e.getMessage, e)
+            case others: Throwable => disconnected = true; throw others
+        } finally  {
+            if(pool != null && disconnected)
+                pool.destroyClient(this)
+        }
+    }
+
+    private def sendCommand(command: String, expect: String, expectErr: List[String]): List[String] = {
+        updateLastUsed
+        try {
+            conn.sendCommand(command, expect, expectErr)
+        } catch {
+            case e: IOException => disconnected = true; throw BeanstalkDisconnectedException(e.getMessage, e)
+            case others: Throwable => disconnected = true; throw others
+        } finally {
+            if(pool != null && disconnected)
+                pool.destroyClient(this)
+        }
+    }
+
+    private def sendCommand(command: String, data: Array[Byte], expect: String, expectErr: List[String]): List[String] = {
+        updateLastUsed
+        try {
+            conn.sendCommand(command, data, expect, expectErr)
+        } catch {
+            case e: IOException => disconnected = true; throw BeanstalkDisconnectedException(e.getMessage, e)
+            case others: Throwable => disconnected = true; throw others
+        } finally {
+            if(pool != null && disconnected)
+                pool.destroyClient(this)
+        }
+    }
+
+    private def read(size: Int): Array[Byte] = {
+        updateLastUsed
+        try {
+            conn.getBody(size)
+        } catch {
+            case e: IOException => disconnected = true; throw BeanstalkDisconnectedException(e.getMessage, e)
+            case others: Throwable => disconnected = true; throw others
+        } finally {
+            if(pool != null && disconnected)
+                pool.destroyClient(this)
+        }
+    }
+
+
     @throws(classOf[BeanstalkException])
     def put(data: Array[Byte], priority: Long, delay: Int, ttr: Int): Long = {
-        updateLastUsed
-
         val size = data.size
         val command = s"put $priority $delay $ttr $size"
         val expectErr = List("BURIED", "EXPECTED_CRLF", "JOB_TOO_BIG", "DRAINING")
-        val response = conn.sendCommand(command, data, "INSERTED", expectErr)
+        val response = sendCommand(command, data, "INSERTED", expectErr)
         response(0).toInt
     }
 
@@ -61,13 +114,11 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkTimeoutException])
     private def reserve(command: String): Job = {
-        updateLastUsed
-
         val expectErr = List("DEADLINE_SOON", "TIMED_OUT")
-        val response = conn.sendCommand(command, "RESERVED", expectErr)
+        val response = sendCommand(command, "RESERVED", expectErr)
         val id = response(0).toLong
         val size = response(1).toInt
-        val bytes = conn.getBody(size)
+        val bytes = read(size)
 
         new Job(id, bytes)
     }
@@ -81,21 +132,17 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def release(id: Long, pri: Long, delay: Int): Unit = {
-        updateLastUsed
-
         val command = s"release $id $pri $delay"
         val expectErr = List("BURIED", "NOT_FOUND")
-        conn.sendCommand(command, "RELEASED", expectErr)
+        sendCommand(command, "RELEASED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def bury(id: Long, pri: Long): Unit = {
-        updateLastUsed
-
         val command = s"bury $id $pri"
         val expectErr = List("NOT_FOUND")
-        conn.sendCommand(command, "BURIED", expectErr)
+        sendCommand(command, "BURIED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
@@ -107,92 +154,74 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def touch(id: Long): Unit = {
-        updateLastUsed
-
         val command = s"touch $id"
         val expectErr = List("NOT_FOUND")
-        conn.sendCommand(command, "TOUCHED", expectErr)
+        sendCommand(command, "TOUCHED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
     def kick(bound: Int): Int = {
-        updateLastUsed
-
         val command = s"kick $bound"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "KICKED", expectErr)
+        val response = sendCommand(command, "KICKED", expectErr)
         response(0).toInt
     }
 
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def kickJob(id: Long): Unit = {
-        updateLastUsed
-
         val command = s"kick-job $id"
         val expectErr = List("NOT_FOUND")
-        conn.sendCommand(command, "KICKED", expectErr)
+        sendCommand(command, "KICKED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def delete(id: Long): Unit = {
-        updateLastUsed
-
         val command = s"delete $id"
         val expectErr = List("NOT_FOUND")
-        conn.sendCommand(command, "DELETED", expectErr)
+        sendCommand(command, "DELETED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
     def use(tube: String): Unit = {
-        updateLastUsed
-
         val command = s"use $tube"
         val expectErr = List[String]()
-        conn.sendCommand(command, "USING", expectErr)
+        sendCommand(command, "USING", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
     def watch(tube: String): Int = {
-        updateLastUsed
-
         val command = s"watch $tube"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "WATCHING", expectErr)
+        val response = sendCommand(command, "WATCHING", expectErr)
         response(0).toInt
     }
 
     @throws(classOf[BeanstalkException])
     def ignore(tube: String): Int = {
-        updateLastUsed
-
         val command = s"ignore $tube"
         val expectErr = List("NOT_IGNORED")
-        val response = conn.sendCommand(command, "WATCHING", expectErr)
+        val response = sendCommand(command, "WATCHING", expectErr)
         response(0).toInt
     }
 
     @throws(classOf[BeanstalkException])
     def listTubes(): List[String] = {
-        updateLastUsed
-
         val command = "list-tubes"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "OK", expectErr)
+        val response = sendCommand(command, "OK", expectErr)
         val size = response(0).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
 
         yamlToList(body)
     }
 
     @throws(classOf[BeanstalkException])
     def listTubeUsed(): String = {
-        updateLastUsed
-
         val command = "list-tube-used"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "USING", expectErr)
+        val response = sendCommand(command, "USING", expectErr)
         val name = response(0)
 
         new String(name)
@@ -200,13 +229,11 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
 
     @throws(classOf[BeanstalkException])
     def listTubesWatched(): List[String] = {
-        updateLastUsed
-
         val command = "list-tubes-watched"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "OK", expectErr)
+        val response = sendCommand(command, "OK", expectErr)
         val size = response(0).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
 
         yamlToList(body)
     }
@@ -214,11 +241,9 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def pauseTube(tube: String, delay: Int): Unit = {
-        updateLastUsed
-
         val command = s"pause-tube $tube $delay"
         val expectErr = List("NOT_FOUND")
-        conn.sendCommand(command, "PAUSED", expectErr)
+        sendCommand(command, "PAUSED", expectErr)
     }
 
     @throws(classOf[BeanstalkException])
@@ -252,26 +277,22 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     private def peek(command: String): Job = {
-        updateLastUsed
-
         val expectErr = List("NOT_FOUND")
-        val response = conn.sendCommand(command, "FOUND", expectErr)
+        val response = sendCommand(command, "FOUND", expectErr)
         val id = response(0).toLong
         val size = response(1).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
         new Job(id, body)
     }
 
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def statsJob(id: Long): JobStats = {
-        updateLastUsed
-
         val command = s"stats-job  $id"
         val expectErr = List("NOT_FOUND")
-        val response = conn.sendCommand(command, "OK", expectErr)
+        val response = sendCommand(command, "OK", expectErr)
         val size = response(0).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
 
         val json = yamlToJson(body)
         new JobStats(json)
@@ -280,13 +301,11 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
     @throws(classOf[BeanstalkException])
     @throws(classOf[BeanstalkNotFoundException])
     def statsTube(tube: String): TubeStats = {
-        updateLastUsed
-
         val command = s"stats-tube $tube"
         val expectErr = List("NOT_FOUND")
-        val response = conn.sendCommand(command, "OK", expectErr)
+        val response = sendCommand(command, "OK", expectErr)
         val size = response(0).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
 
         val json = yamlToJson(body)
         new TubeStats(json)
@@ -294,23 +313,19 @@ class Beanstalkc(private[beanstalkc] val conn: BeanstalkConnect) {
 
     @throws(classOf[BeanstalkException])
     def stats(): BeanstalkStats = {
-        updateLastUsed
-
         val command = "stats"
         val expectErr = List[String]()
-        val response = conn.sendCommand(command, "OK", expectErr)
+        val response = sendCommand(command, "OK", expectErr)
         val size = response(0).toInt
-        val body = conn.getBody(size)
+        val body = read(size)
 
         val json = yamlToJson(body)
         new BeanstalkStats(json)
     }
 
     def quit(): Unit = {
-        updateLastUsed
-
         val command = "quit"
-        conn.sendCommand(command)
+        sendCommand(command)
     }
 
     def close(): Unit = {
